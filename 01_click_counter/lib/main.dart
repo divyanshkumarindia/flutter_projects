@@ -1,139 +1,132 @@
 import 'package:flutter/foundation.dart';
-// foundation.dart package provides basic Flutter framework functionalities
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-// so basically the way to modularize code in Flutter is by creating widgets
-// widgets are the building blocks of a Flutter app
-// everything in Flutter is a widget
-// widgets are basically reusable components that can be combined to create complex UIs
-// so to modularize code we create custom widgets by extending StatelessWidget or StatefulWidget
-// StatelessWidget is used when the widget does not need to manage any state
-// StatefulWidget is used when the widget needs to manage state
-// state like data that can change over time
-// for example, a button that changes its color when pressed
+// The difference between provider and setState is that, provider allows state to be shared across multiple widgets and screens,
+// while setState is limited to the widget it is called in. 
+// It's a more scalable way to manage state in larger apps.
 
-void main() {
-  // The main function is the entry point of the application
-  runApp(MyApp());
-  // runApp function takes a widget and makes it the root of the widget tree
+// Entry point — start the app with MyApp as root.
+void main() => runApp(const MyApp());
+// The app starts here. 
+// runApp() tells Flutter to render the widget tree starting with MyApp.
+
+// CounterProvider for state management.
+// where the count lives and how it's updated
+class CounterProvider extends ChangeNotifier { // -----------------
+  int _count = 0;
+  int get count => _count;
+  // _count is a private integer (starts at 0).
+  // get count => _count; gives read access to the value.
+
+  void increment() {
+    _count++;
+    // changing the state
+    notifyListeners(); // ---------------------
+  // Why ChangeNotifier and notifyListeners? // <-----
+  // ChangeNotifier is a simple way to notify any listening widgets that the state changed.
+  // notifyListeners() tells Provider: "Hey, something changed — rebuild listening widgets."
+  }
 }
 
+// Root application widget.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  // MyApp is a stateless widget that represents the application
-
-  // StatelessWidget is used when the widget does not need to manage any state
-  // state like data that can change over time
+  // we used super.key to pass the key to the superclass constructor.
+  // key is an optional parameter that helps Flutter identify widgets uniquely in the widget tree.
 
   @override
-  // @override means we are overriding the build method of StatelessWidget
-  // it is basically used to customize the behavior of the parent class
-  // in this case, we are customizing how the widget is built
-  // like defining the UI of the widget
   Widget build(BuildContext context) {
-    // widget build method is called whenever the widget needs to be rendered
-    // context provides information about the location of this widget in the widget tree
-    // here BuildContext is a handle to the location of a widget in the widget tree
-    // handle means like reference or address
-
-    return MaterialApp(
-      // returning a MaterialApp widget
-      // MaterialApp is a convenience widget that wraps a number of widgets that are commonly required for material design applications
-      // like navigation, theming, etc.
-      debugShowCheckedModeBanner: false,
-
-      // debugShowCheckedModeBanner is used to hide the debug banner in the top right corner
-      // it is useful when you want to show a clean UI without the debug banner
-      title: 'Flutter Basic App', // title of the application
-
-      theme: ThemeData(
-        // theme of the application
-        // ThemeData is used to configure the visual theme of the application
-        // like colors, fonts, and other visual properties
-        primarySwatch: Colors.blue,
-        // primarySwatch defines the primary color of the application
+    return ChangeNotifierProvider( // ------------
+      // This makes CounterProvider available to all widgets below it in the widget tree.
+      create: (_) => CounterProvider(), // ---------
+      // Provider is a state management solution for Flutter.
+      child: MaterialApp( // ---------------------
+        // This wraps your MaterialApp with a Provider,
+        // that makes CounterProvider available to the widget tree.
+        debugShowCheckedModeBanner: false,
+        title: 'Flutter Basic App',
+        theme: ThemeData(primarySwatch: Colors.blue),
+        home: const MyHomePage(),
       ),
-      home: MyHomePage(), // home is the default route of the application
-      // MyHomePage is a custom widget that represents the home screen of the application
-      // like the main screen that users see when they open the app
-      // similarly we can define other routes for navigation
-      // such as login, settings, profile, etc.
     );
   }
 }
 
+// Home screen.
 class MyHomePage extends StatelessWidget {
   const MyHomePage({super.key});
 
-  // MyHomePage is a stateless widget that represents the home screen of the application
-  // it is a custom widget that we defined to show the main content of the app
-
-  // extends StatelessWidget means MyHomePage inherits properties and methods from StatelessWidget
-  // so we can use those properties and methods in MyHomePage
-
-  @override // overriding the build method of StatelessWidget
-  // it will be called whenever the widget needs to be rendered, so almost every time we open the app
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // Scaffold is a layout structure for the material design
-      // it provides a framework for implementing the basic visual layout structure of the app
-      // like app bar, body, floating action button, drawer, etc.
-      // in this case we are using appBar and body, but note that all these comes under Scaffold widget only
-      appBar: AppBar(
-        // AppBar is a material design app bar
-        // it is a horizontal bar typically shown at the top of an app using the app's primary color
-        // it usually contains the title of the screen and actions like buttons, menus, etc.
-        title: Text('Home'),
 
-        // title is the main title of the app bar
-        // here we are using a Text widget to display the title
+    final counter = context.watch<CounterProvider>();
+    //This line tells Flutter: “I want to read CounterProvider here and rebuild when it changes.”
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Home'),
         actions: [
-          // actions is a list of widgets that are displayed in the app bar
-          // typically used for actions like search, settings, etc.
           IconButton(
-            // IconButton is a material design icon button
-            // it is a button that displays an icon and reacts to touches
-            // here we are using an IconButton to show a settings icon in the app bar
-            // similarly we can add more IconButton widgets for other actions
-            // like search, notifications, etc.
-            // but they must be wrapped inside the actions list, as shown above.
-            // note that
-            // each IconButton can have its own icon, tooltip, and onPressed callback
-            // we can add multiple IconButton widgets inside the actions list,
-            // but the icon, tooltip, and onPressed must be defined for each IconButton
-            // like they can't be inside the same IconButton widget
-            // because each IconButton represents a single button with its own properties
-            icon: Icon(
-              Icons.settings,
-            ), // icon is the icon to display in the button
-            tooltip:
-                'Settings', // tooltip is the text that is displayed when the user long-presses the button
-            // it is useful for accessibility and providing additional information about the button
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
             onPressed: () {
-              // onPressed is a callback function that is called when the button is pressed
-              // here we can define what happens when the button is pressed
-              // for example, navigate to settings page, show a dialog, etc.
-              if (kDebugMode) {
-                print('Settings button pressed');
-              } // for now, we are just printing a message to the console
+              if (kDebugMode) print('Settings button pressed');
             },
           ),
         ],
       ),
       body: Center(
-        // body is the main content of the screen
-        // here we are using a Center widget to center the content in the body
-        child: Text(
-          // child is the widget that is displayed in the body
-          // here we are using a Text widget to display some text
-          'Hello India!',
-          style: TextStyle(
-            fontSize: 24,
-          ), // style is used to define the text style
-          // here we are setting the font size to 24
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Hello India!',
+              style: GoogleFonts.lato(
+                textStyle: const TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.blue,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              '👍 ${counter.count}',
+              style: const TextStyle(fontSize: 32),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Provider.of<CounterProvider>(context, listen: false).increment(),
+              // This finds the CounterProvider instance (listen: false means "don't subscribe here") and calls increment().
+              // Inside increment():
+              // -- _count++ increases the stored number.
+              // -- notifyListeners() tells Provider to rebuild any widgets that are watching this provider.
+              child: const Text('Increase Number'),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+  // Tiny glossary for terms used:
+  // Widget: a UI building block (buttons, text, layout containers).
+  // StatelessWidget: a widget that doesn't store state.
+  // StatefulWidget + State: a widget that stores mutable state inside a State object.
+  // Provider: a package that makes state available to widgets and notifies listeners when it changes.
+  // ChangeNotifier: an object that can notify listeners about changes.
+  // notifyListeners(): call this after changing state so widgets rebuild.
+  // context.watch<T>(): read and subscribe to a Provider<T>.
+  // Provider.of<T>(context, listen: false): read Provider<T> without subscribing.
+
+  // Quick notes / improvements you might consider:
+  // Persist the counter (e.g., SharedPreferences) if you want it across app restarts.
+  // Add persistence so the count is stored across app launches.
+  // For larger state needs, consider more structured patterns (Riverpod, Bloc) — but Provider is fine for this use case.
+  // Explore using Riverpod or Bloc for more complex state management.
+
+// That's it! A simple click counter app using Provider for state management.

@@ -1,20 +1,3 @@
-<<<<<<< HEAD
-# my_app
+# Click Counter
 
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# First_app-Num_Inc_on_click
->>>>>>> 4234bdb651582a97df6d4794255b32f26a25b5af
+A simple Flutter project that increments a number on button click.
