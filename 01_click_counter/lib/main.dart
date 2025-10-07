@@ -4,13 +4,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+// SharePlus is a popular package for sharing content via the platform's share sheet.
 
 void main() => runApp(const MyApp());
 
 class CounterProvider extends ChangeNotifier {
   static const _prefsKey = 'counter_value';
+  static const _prefsUpdatedKey = 'counter_last_updated';
+  // Keys for SharedPreferences, to store the counter value and last updated timestamp.
   int _count = 0;
+  DateTime? _lastUpdated;
+  // _lastUpdated can be null initially if never updated, like on first load.
   int get count => _count;
+  DateTime? get lastUpdated => _lastUpdated;
+  // This lastUpdated getter can return null if never updated.
+  // like when the app is first installed and opened.
 
   CounterProvider() {
     _loadFromPrefs();
@@ -19,22 +28,47 @@ class CounterProvider extends ChangeNotifier {
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _count = prefs.getInt(_prefsKey) ?? 0;
+    final millis = prefs.getInt(_prefsUpdatedKey);
+    if (millis != null) {
+      _lastUpdated = DateTime.fromMillisecondsSinceEpoch(millis);
+    }
+    // If millis is null, _lastUpdated remains null.
+    // Here millis is an integer representing the timestamp in milliseconds since epoch.
+    // Epoch is Jan 1, 1970 UTC.
     notifyListeners();
   }
 
   Future<void> _saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefsKey, _count);
+    if (_lastUpdated != null) {
+      await prefs.setInt(
+        _prefsUpdatedKey,
+        _lastUpdated!.millisecondsSinceEpoch,
+      );
+    } // If _lastUpdated is null, we don't save it.
   }
 
   void increment() {
     _count++;
+    _lastUpdated = DateTime.now();
+    // Set last updated to current time on increment.
     _saveToPrefs();
     notifyListeners();
   }
 
   void reset() {
     _count = 0;
+    _lastUpdated = DateTime.now();
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  /// Restore to a given value (used for undo or programmatic restores)
+  void restore(int value, {DateTime? updatedAt}) {
+    _count = value;
+    _lastUpdated = updatedAt ?? DateTime.now();
+    // What here we did is that we set last updated to the provided time or now if not provided.
     _saveToPrefs();
     notifyListeners();
   }
@@ -101,16 +135,10 @@ class MyHomePage extends StatelessWidget {
               ),
             ),
 
-            // ---------------------------------------------------------------
-            // Counter display and controls (refactored below)
             const SizedBox(height: 24),
             CounterDisplay(),
             const SizedBox(height: 24),
             ControlButtons(),
-            // ---------------------------------------------------------------
-
-            // refactored widgets placed above
-            // ---------------------------------------------------------------
           ],
         ),
       ),
@@ -118,7 +146,6 @@ class MyHomePage extends StatelessWidget {
   }
 }
 
-// CounterDisplay: shows the thumbs-up emoji bouncing on increment (number does not animate)
 class CounterDisplay extends StatefulWidget {
   const CounterDisplay({super.key});
   @override
@@ -129,8 +156,6 @@ class _CounterDisplayState extends State<CounterDisplay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _offsetAnim;
-  // Initialize animation controller and listen to provider changes
-  // This will allow us to trigger the bounce animation when the counter changes
 
   @override
   void initState() {
@@ -146,8 +171,6 @@ class _CounterDisplayState extends State<CounterDisplay>
       begin: Offset.zero,
       end: const Offset(0, -0.15),
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    // then back down (not needed, just reverse the same animation)
-    // tween means to make a transition between two values (begin and end)
 
     // Listen to provider changes and trigger bounce when count changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -174,18 +197,51 @@ class _CounterDisplayState extends State<CounterDisplay>
   @override
   Widget build(BuildContext context) {
     final count = context.watch<CounterProvider>().count;
-    return Row(
+    final last = context.watch<CounterProvider>().lastUpdated;
+    // here last can be null if never updated.
+    // Build a compact column: a row with emoji + number, then timestamp centered
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Animated thumbs-up emoji only on increment --------------------------
-        SlideTransition(
-          position: _offsetAnim,
-          child: const Text('👍', style: TextStyle(fontSize: 32)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SlideTransition(
+              position: _offsetAnim,
+              child: const Text('👍', style: TextStyle(fontSize: 32)),
+            ),
+            const SizedBox(width: 8),
+            Text('$count', style: const TextStyle(fontSize: 32)),
+          ],
         ),
-        const SizedBox(width: 8),
-        Text('$count', style: const TextStyle(fontSize: 32)),
-      ], // --------------------------------------------------------------------
+        const SizedBox(height: 4),
+        Text(
+          last != null ? 'Updated: ${_formatTimestamp(last)}' : 'Updated: N/A',
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
+  }
+
+  static String _formatTimestamp(DateTime dt) {
+    // Convert the provided DateTime to IST (UTC+5:30) and format as
+    // YYYY-MM-DD HH:MM. We do not change the original timezone of `dt` but
+    // compute the IST equivalent from UTC milliseconds since epoch.
+    final utcMillis = dt.toUtc().millisecondsSinceEpoch;
+    // IST offset in milliseconds = 5.5 hours
+    const istOffsetMillis = 5 * 60 * 60 * 1000 + 30 * 60 * 1000;
+    final ist = DateTime.fromMillisecondsSinceEpoch(
+      utcMillis + istOffsetMillis,
+      isUtc: true,
+    ).toLocal();
+
+    final y = ist.year.toString().padLeft(4, '0');
+    final m = ist.month.toString().padLeft(2, '0');
+    final d = ist.day.toString().padLeft(2, '0');
+    final h = ist.hour.toString().padLeft(2, '0');
+    final min = ist.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $h:$min IST';
   }
 }
 
@@ -210,6 +266,41 @@ class ControlButtons extends StatelessWidget {
           },
           child: const Text('Increase Number'),
         ),
+
+        // Copy and Share buttons ----------------------------------------------
+        const SizedBox(height: 8),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () {
+                // Copy count to clipboard
+                Clipboard.setData(
+                  ClipboardData(text: provider.count.toString()),
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Count copied to clipboard')),
+                );
+              },
+              icon: const Icon(Icons.copy),
+              label: const Text('Copy'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Share using platform share sheet (SharePlus)
+                SharePlus.instance.share(
+                  ShareParams(text: 'Current count: ${provider.count}'),
+                );
+              },
+              icon: const Icon(Icons.share),
+              label: const Text('Share'),
+            ),
+          ],
+        ),
+        // ----------------------------------------------------------------------
+
+        // Reset button with confirmation dialog and snackbar
         const SizedBox(height: 12),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
@@ -246,8 +337,7 @@ class ControlButtons extends StatelessWidget {
               if (!context.mounted) return;
               provider.reset();
 
-              // Show snackbar confirmation
-              // like a toast message
+              // Snackbar confirmation
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Counter reset to zero')),
               );
