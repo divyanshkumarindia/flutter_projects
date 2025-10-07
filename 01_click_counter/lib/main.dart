@@ -108,95 +108,91 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+// The previous stateless MyHomePage has been replaced by a stateful
+// implementation below that supports tabbed navigation (IndexedStack).
+
+class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage>
+    with SingleTickerProviderStateMixin {
+  int _currentIndex = 0;
+
+  final List<Widget> _pages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Pages: Home (we'll build on the fly), Saved, Settings
+    _pages.add(_buildHomeTab());
+    _pages.add(const _SavedPage());
+    _pages.add(const _SettingsPage());
+  }
+
+  Widget _buildHomeTab() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Styled text using Google Fonts
+          Text(
+            'Hello Divyansh!',
+            style: GoogleFonts.lato(
+              textStyle: const TextStyle(
+                fontSize: 44,
+                fontWeight: FontWeight.w800,
+                color: Colors.blue,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          CounterDisplay(),
+          const SizedBox(height: 24),
+          ControlButtons(),
+        ],
+      ),
+    );
+  }
+
+  void _setIndex(int i) {
+    setState(() => _currentIndex = i);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Styled text using Google Fonts
-            Text(
-              'Hello Divyansh!',
-              style: GoogleFonts.lato(
-                textStyle: const TextStyle(
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.blue,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-            CounterDisplay(),
-            const SizedBox(height: 24),
-            ControlButtons(),
-          ],
-        ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      bottomNavigationBar: _PremiumBottomNav(
+        currentIndex: _currentIndex,
+        onTap: _setIndex,
       ),
-      // Minimal rounded bottom navigation bar (wireframe only)
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Container(
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Home
-                Tooltip(
-                  message: 'Home',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.blue.shade50,
-                    ),
-                    padding: const EdgeInsets.all(10),
-                    child: const Icon(Icons.home, color: Colors.blue),
-                  ),
-                ),
-                // Saved
-                Tooltip(
-                  message: 'Saved',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.grey.shade100,
-                    ),
-                    padding: const EdgeInsets.all(10),
-                    child: const Icon(Icons.bookmark, color: Colors.grey),
-                  ),
-                ),
-                // Settings
-                Tooltip(
-                  message: 'Settings',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.grey.shade100,
-                    ),
-                    padding: const EdgeInsets.all(10),
-                    child: const Icon(Icons.settings, color: Colors.grey),
-                  ),
-                ),
-              ],
-            ),
+    );
+  }
+}
+
+// Simple placeholder Saved page (layout only)
+class _SavedPage extends StatelessWidget {
+  const _SavedPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.bookmark, size: 72, color: Colors.grey),
+              SizedBox(height: 12),
+              Text('Saved counters (placeholder)'),
+            ],
           ),
         ),
       ),
@@ -204,6 +200,41 @@ class MyHomePage extends StatelessWidget {
   }
 }
 
+// Simple placeholder Settings page (layout only)
+class _SettingsPage extends StatelessWidget {
+  const _SettingsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.settings, size: 72, color: Colors.grey),
+              SizedBox(height: 12),
+              Text('Settings (placeholder)'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Premium-looking bottom nav with animated active icon
+class _PremiumBottomNav extends StatefulWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _PremiumBottomNav({required this.currentIndex, required this.onTap});
+
+  @override
+  State<_PremiumBottomNav> createState() => _PremiumBottomNavState();
+}
+
+// CounterDisplay: shows the thumbs-up emoji bouncing on increment (number does not animate)
 class CounterDisplay extends StatefulWidget {
   const CounterDisplay({super.key});
   @override
@@ -224,13 +255,11 @@ class _CounterDisplayState extends State<CounterDisplay>
       duration: const Duration(milliseconds: 250),
     );
 
-    // Bounce up by 15% of the height
     _offsetAnim = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(0, -0.15),
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
-    // Listen to provider changes and trigger bounce when count changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<CounterProvider>(context, listen: false);
       provider.addListener(_onProviderChange);
@@ -239,9 +268,7 @@ class _CounterDisplayState extends State<CounterDisplay>
 
   void _onProviderChange() {
     final provider = Provider.of<CounterProvider>(context, listen: false);
-    // Only animate for single-tap increments that requested animation
     if (provider.shouldAnimate) {
-      // Play bounce: up then back
       _controller.forward().then((_) => _controller.reverse());
       provider.clearAnimateFlag();
     }
@@ -287,7 +314,6 @@ class _CounterDisplayState extends State<CounterDisplay>
 
   static String _formatTimestamp(DateTime dt) {
     final utcMillis = dt.toUtc().millisecondsSinceEpoch;
-    // IST offset in milliseconds = 5.5 hours
     const istOffsetMillis = 5 * 60 * 60 * 1000 + 30 * 60 * 1000;
     final ist = DateTime.fromMillisecondsSinceEpoch(
       utcMillis + istOffsetMillis,
@@ -300,6 +326,58 @@ class _CounterDisplayState extends State<CounterDisplay>
     final h = ist.hour.toString().padLeft(2, '0');
     final min = ist.minute.toString().padLeft(2, '0');
     return '$y-$m-$d $h:$min IST';
+  }
+}
+
+class _PremiumBottomNavState extends State<_PremiumBottomNav>
+    with SingleTickerProviderStateMixin {
+  @override
+  Widget build(BuildContext context) {
+    final items = [Icons.home, Icons.bookmark, Icons.settings];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Container(
+          height: 70,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.white, Colors.grey.shade50],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(items.length, (i) {
+              final active = widget.currentIndex == i;
+              return GestureDetector(
+                onTap: () => widget.onTap(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  padding: EdgeInsets.all(active ? 12 : 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: active ? Colors.blue : Colors.grey.shade100,
+                  ),
+                  child: Icon(
+                    items[i],
+                    color: active ? Colors.white : Colors.grey,
+                    size: active ? 28 : 24,
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
   }
 }
 
