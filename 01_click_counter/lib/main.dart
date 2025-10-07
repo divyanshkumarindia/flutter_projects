@@ -4,13 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// The entry point of the application.
 void main() => runApp(const MyApp());
 
-/// Manages the state of the counter.
-///
-/// This provider handles loading, saving, incrementing, and resetting the
-/// counter value, persisting it across app sessions using [SharedPreferences].
 class CounterProvider extends ChangeNotifier {
   static const _prefsKey = 'counter_value';
   int _count = 0;
@@ -20,16 +15,12 @@ class CounterProvider extends ChangeNotifier {
     _loadFromPrefs();
   }
 
-  /// Loads the counter value from shared preferences.
-  ///
-  /// If no value is found, it defaults to 0.
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _count = prefs.getInt(_prefsKey) ?? 0;
     notifyListeners();
   }
 
-  /// Saves the current counter value to shared preferences.
   Future<void> _saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefsKey, _count);
@@ -41,20 +32,11 @@ class CounterProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------------------------------------------------------------
-  // Reset the counter to zero and persist the change.
   void reset() {
     _count = 0;
     _saveToPrefs();
     notifyListeners();
   }
-  // reset() updates the provider's internal value and persists it.
-  // notifyListeners() causes widgets that watch the provider (your UI)
-  // to rebuild and show the new value.
-
-  // Because _saveToPrefs() stores the value in SharedPreferences,
-  // the zeroed value is preserved across app reloads.
-  // ---------------------------------------------------------------
 }
 
 class MyApp extends StatelessWidget {
@@ -67,7 +49,18 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Flutter Basic App',
-        theme: ThemeData(primarySwatch: Colors.blue),
+        // ---------------------------------------------------------------
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.blue,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            // ------------------------------------------------------------
+          ),
+        ),
         home: const MyHomePage(),
       ),
     );
@@ -98,7 +91,6 @@ class MyHomePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
             // Styled text using Google Fonts
             Text(
               'Hello India!',
@@ -111,11 +103,22 @@ class MyHomePage extends StatelessWidget {
                 ),
               ),
             ),
-            
-            // Counter display
+
+            // ---------------------------------------------------------------
+            // Counter display with small animation
             const SizedBox(height: 24),
-            Text('👍 ${counter.count}', style: const TextStyle(fontSize: 32)),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: Text(
+                '👍 ${counter.count}',
+                key: ValueKey<int>(counter.count),
+                style: const TextStyle(fontSize: 32),
+              ),
+            ),
             const SizedBox(height: 24),
+            // ---------------------------------------------------------------
 
             // Increment Button
             ElevatedButton(
@@ -130,13 +133,48 @@ class MyHomePage extends StatelessWidget {
             const SizedBox(height: 12),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.black,
                 backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
               ),
-              onPressed: () =>
-                  Provider.of<CounterProvider>(context, listen: false).reset(),
+              // -------------------------------------------------------------
+              onPressed: () async {
+                // we used async as we are going to show a dialog
+                // dialog is a future that returns a value when closed
+                // like here we are returning true or false based on user action
+                final provider = Provider.of<CounterProvider>(
+                  context,
+                  listen: false,
+                ); // Capture provider before awaiting the dialog
+
+                // Show confirmation dialog
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirm reset'),
+                    content: const Text(
+                      'Are you sure you want to reset the counter to zero?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Reset'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true) {
+                  provider.reset();
+                }
+              },
               child: const Text('Reset'),
             ),
+            // ---------------------------------------------------------------
           ],
         ),
       ),
