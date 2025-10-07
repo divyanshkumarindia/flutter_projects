@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
@@ -115,18 +114,7 @@ class MyHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Settings',
-            onPressed: () {
-              if (kDebugMode) print('Settings button pressed');
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -149,6 +137,67 @@ class MyHomePage extends StatelessWidget {
             const SizedBox(height: 24),
             ControlButtons(),
           ],
+        ),
+      ),
+      // Minimal rounded bottom navigation bar (wireframe only)
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Home
+                Tooltip(
+                  message: 'Home',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.blue.shade50,
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: const Icon(Icons.home, color: Colors.blue),
+                  ),
+                ),
+                // Saved
+                Tooltip(
+                  message: 'Saved',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade100,
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: const Icon(Icons.bookmark, color: Colors.grey),
+                  ),
+                ),
+                // Settings
+                Tooltip(
+                  message: 'Settings',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade100,
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: const Icon(Icons.settings, color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -237,9 +286,6 @@ class _CounterDisplayState extends State<CounterDisplay>
   }
 
   static String _formatTimestamp(DateTime dt) {
-    // Convert the provided DateTime to IST (UTC+5:30) and format as
-    // YYYY-MM-DD HH:MM. We do not change the original timezone of `dt` but
-    // compute the IST equivalent from UTC milliseconds since epoch.
     final utcMillis = dt.toUtc().millisecondsSinceEpoch;
     // IST offset in milliseconds = 5.5 hours
     const istOffsetMillis = 5 * 60 * 60 * 1000 + 30 * 60 * 1000;
