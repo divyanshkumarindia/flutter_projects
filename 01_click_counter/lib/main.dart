@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,11 +16,9 @@ class CounterProvider extends ChangeNotifier {
   // Keys for SharedPreferences, to store the counter value and last updated timestamp.
   int _count = 0;
   DateTime? _lastUpdated;
-  // _lastUpdated can be null initially if never updated, like on first load.
+  bool _shouldAnimate = false;
   int get count => _count;
   DateTime? get lastUpdated => _lastUpdated;
-  // This lastUpdated getter can return null if never updated.
-  // like when the app is first installed and opened.
 
   CounterProvider() {
     _loadFromPrefs();
@@ -32,9 +31,6 @@ class CounterProvider extends ChangeNotifier {
     if (millis != null) {
       _lastUpdated = DateTime.fromMillisecondsSinceEpoch(millis);
     }
-    // If millis is null, _lastUpdated remains null.
-    // Here millis is an integer representing the timestamp in milliseconds since epoch.
-    // Epoch is Jan 1, 1970 UTC.
     notifyListeners();
   }
 
@@ -46,15 +42,30 @@ class CounterProvider extends ChangeNotifier {
         _prefsUpdatedKey,
         _lastUpdated!.millisecondsSinceEpoch,
       );
-    } // If _lastUpdated is null, we don't save it.
+    }
   }
 
-  void increment() {
+  void increment({bool animate = true}) {
     _count++;
     _lastUpdated = DateTime.now();
-    // Set last updated to current time on increment.
+    _shouldAnimate = animate;
     _saveToPrefs();
     notifyListeners();
+  }
+
+  void decrement({bool animate = false}) {
+    if (_count <= 0) return;
+    _count--;
+    _lastUpdated = DateTime.now();
+    _shouldAnimate = animate;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  bool get shouldAnimate => _shouldAnimate;
+
+  void clearAnimateFlag() {
+    _shouldAnimate = false;
   }
 
   void reset() {
@@ -64,11 +75,9 @@ class CounterProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Restore to a given value (used for undo or programmatic restores)
   void restore(int value, {DateTime? updatedAt}) {
     _count = value;
     _lastUpdated = updatedAt ?? DateTime.now();
-    // What here we did is that we set last updated to the provided time or now if not provided.
     _saveToPrefs();
     notifyListeners();
   }
@@ -180,8 +189,13 @@ class _CounterDisplayState extends State<CounterDisplay>
   }
 
   void _onProviderChange() {
-    // Play bounce: up then back
-    _controller.forward().then((_) => _controller.reverse());
+    final provider = Provider.of<CounterProvider>(context, listen: false);
+    // Only animate for single-tap increments that requested animation
+    if (provider.shouldAnimate) {
+      // Play bounce: up then back
+      _controller.forward().then((_) => _controller.reverse());
+      provider.clearAnimateFlag();
+    }
   }
 
   @override
@@ -198,8 +212,6 @@ class _CounterDisplayState extends State<CounterDisplay>
   Widget build(BuildContext context) {
     final count = context.watch<CounterProvider>().count;
     final last = context.watch<CounterProvider>().lastUpdated;
-    // here last can be null if never updated.
-    // Build a compact column: a row with emoji + number, then timestamp centered
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -252,19 +264,53 @@ class ControlButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<CounterProvider>(context, listen: false);
-
     return Column(
       children: [
-        ElevatedButton(
-          onPressed: () {
-            HapticFeedback.selectionClick();
-            // Haptic feedback is used to provide tactile feedback to the user
-            // like a vibration when they press the button
-            // selectionClick is a light feedback
-            // mediumImpact is a stronger feedback (used in reset button below)
-            provider.increment();
-          },
-          child: const Text('Increase Number'),
+        // Row with left arrow, main increase button, and right arrow
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Left arrow (decrement)
+            _RepeatIconButton(
+              icon: Icons.arrow_left,
+              color: Colors.grey.shade300,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                provider.decrement(animate: true);
+              },
+              onHold: () {
+                // continuous fast decrement while holding
+                provider.decrement(animate: false);
+              },
+            ),
+            const SizedBox(width: 8),
+            // Sized box for spacing
+            // And to control the radius of the button  like to make it more rounded or less rounded.
+            // to control radius of the button we can use the shape property of the ElevatedButton.
+            // like ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                // single-tap increment should animate
+                provider.increment(animate: true);
+              },
+              child: const Text('Increase Number'),
+            ),
+            const SizedBox(width: 8),
+            // Right arrow (increment)
+            _RepeatIconButton(
+              icon: Icons.arrow_right,
+              color: Colors.grey.shade300,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                provider.increment(animate: true);
+              },
+              onHold: () {
+                // continuous fast increment while holding
+                provider.increment(animate: false);
+              },
+            ),
+          ],
         ),
 
         // Copy and Share buttons ----------------------------------------------
@@ -348,5 +394,68 @@ class ControlButtons extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// A small icon button that supports single tap and press-and-hold repeating.
+class _RepeatIconButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onHold;
+
+  const _RepeatIconButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    required this.onHold,
+  });
+
+  @override
+  State<_RepeatIconButton> createState() => _RepeatIconButtonState();
+}
+
+class _RepeatIconButtonState extends State<_RepeatIconButton> {
+  Timer? _repeatTimer;
+  Timer? _delayTimer;
+
+  void _startRepeat() {
+    // small initial delay then repeat quickly
+    _delayTimer = Timer(const Duration(milliseconds: 300), () {
+      _repeatTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+        widget.onHold();
+      });
+    });
+  }
+
+  void _stopRepeat() {
+    _delayTimer?.cancel();
+    _repeatTimer?.cancel();
+    _delayTimer = null;
+    _repeatTimer = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _startRepeat(),
+      onTapUp: (_) => _stopRepeat(),
+      onTapCancel: () => _stopRepeat(),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Icon(widget.icon, size: 24),
+      ),
+    );
+  } // This section is used to build the icon button with tap and hold functionality.
+
+  @override
+  void dispose() {
+    _stopRepeat();
+    super.dispose();
   }
 }
