@@ -5,17 +5,18 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-// SharePlus is a popular package for sharing content via the platform's share sheet.
 
 void main() => runApp(const MyApp());
 
 class CounterProvider extends ChangeNotifier {
   static const _prefsKey = 'counter_value';
   static const _prefsUpdatedKey = 'counter_last_updated';
+  static const _prefsSavedKey = 'counter_saved_list';
   // Keys for SharedPreferences, to store the counter value and last updated timestamp.
   int _count = 0;
   DateTime? _lastUpdated;
   bool _shouldAnimate = false;
+  final List<int> _saved = [];
   int get count => _count;
   DateTime? get lastUpdated => _lastUpdated;
 
@@ -30,6 +31,13 @@ class CounterProvider extends ChangeNotifier {
     if (millis != null) {
       _lastUpdated = DateTime.fromMillisecondsSinceEpoch(millis);
     }
+    // load saved list
+    final savedList = prefs.getStringList(_prefsSavedKey) ?? <String>[];
+    _saved.clear();
+    for (final s in savedList) {
+      final v = int.tryParse(s);
+      if (v != null) _saved.add(v);
+    }
     notifyListeners();
   }
 
@@ -42,6 +50,47 @@ class CounterProvider extends ChangeNotifier {
         _lastUpdated!.millisecondsSinceEpoch,
       );
     }
+    // save list as strings
+    await prefs.setStringList(
+      _prefsSavedKey,
+      _saved.map((e) => e.toString()).toList(),
+    );
+  }
+
+  /// Save the current counter value into the saved list (deduplicated at top).
+  void saveCurrent() {
+    // avoid duplicates of the same value in sequence
+    if (_saved.isEmpty || _saved.first != _count) {
+      _saved.insert(0, _count);
+      // keep list reasonably small for performance
+      if (_saved.length > 200) _saved.removeRange(200, _saved.length);
+      _saveToPrefs();
+      notifyListeners();
+    }
+  }
+
+  List<int> get saved => List.unmodifiable(_saved);
+
+  void deleteSavedAt(int index) {
+    if (index < 0 || index >= _saved.length) return;
+    _saved.removeAt(index);
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  /// Clear all saved entries
+  void clearSaved() {
+    if (_saved.isEmpty) return;
+    _saved.clear();
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  /// Restore the saved value into current counter
+  void restoreSavedAt(int index) {
+    if (index < 0 || index >= _saved.length) return;
+    final v = _saved[index];
+    restore(v);
   }
 
   void increment({bool animate = true}) {
@@ -177,28 +226,7 @@ class _MyHomePageState extends State<MyHomePage>
   }
 }
 
-// Simple placeholder Saved page (layout only)
-class _SavedPage extends StatelessWidget {
-  const _SavedPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.bookmark, size: 72, color: Colors.grey),
-              SizedBox(height: 12),
-              Text('Saved counters (placeholder)'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// (Removed old placeholder) - real SavedPage is implemented below.
 
 // Simple placeholder Settings page (layout only)
 class _SettingsPage extends StatelessWidget {
@@ -219,6 +247,164 @@ class _SettingsPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Simple placeholder Settings page (layout only)
+class _SavedPage extends StatelessWidget {
+  const _SavedPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<CounterProvider>(context);
+    final items = provider.saved;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row with title and optional Delete all button aligned right
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Saved counters',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (items.isNotEmpty)
+                    IconButton(
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete all saved values'),
+                            content: const Text(
+                              'Are you sure you want to delete all saved counters? This cannot be undone.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text('Delete all'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          if (!context.mounted) return;
+                          provider.clearSaved();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('All saved values deleted'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.delete_forever_outlined),
+                      tooltip: 'Delete all',
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (items.isEmpty)
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                      'No saved counters yet. Save values from Home.',
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final v = items[index];
+                      return ListTile(
+                        title: Text(
+                          'Value: $v',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        subtitle: Text('Tap to restore'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete saved value'),
+                                content: Text('Delete saved value $v?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok == true) {
+                              if (!context.mounted) return;
+                              provider.deleteSavedAt(index);
+                            }
+                          },
+                        ),
+                        onTap: () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Restore saved value'),
+                              content: Text('Restore counter to $v?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: const Text('Restore'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok == true) {
+                            if (!context.mounted) return;
+                            provider.restoreSavedAt(index);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Restored $v')),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      // No FAB here; use the Save button on Home and Delete All in header above.
     );
   }
 }
@@ -437,7 +623,7 @@ class ControlButtons extends StatelessWidget {
           ],
         ),
 
-        // Copy and Share buttons ----------------------------------------------
+        // Copy, Save, and Share buttons ----------------------------------------------
         const SizedBox(height: 8),
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -454,6 +640,18 @@ class ControlButtons extends StatelessWidget {
               },
               icon: const Icon(Icons.copy),
               label: const Text('Copy'),
+            ),
+             const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Save current count to saved list
+                provider.saveCurrent();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Saved current value')),
+                );
+              },
+              icon: const Icon(Icons.bookmark_add),
+              label: const Text('Save number'),
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(
