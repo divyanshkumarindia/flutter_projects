@@ -309,7 +309,16 @@ class _SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        // AppBar with icon and title
+        title: Row(
+          children: const [
+            Icon(Icons.settings, size: 20, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Settings'),
+          ],
+        ),
+      ),
       body: SafeArea(
         // here safe area is used to avoid notches and system UI overlaps.
         // In this widget, we will use a Padding widget to give some space around the content.
@@ -431,16 +440,31 @@ class _SavedPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row with title and optional Delete all button aligned right
+              // Header with icon, title and saved-count
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Saved counters',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  const Icon(Icons.bookmark, size: 28, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Saved counters',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '${items.length} saved',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (items.isNotEmpty)
@@ -663,12 +687,9 @@ class _CounterDisplayState extends State<CounterDisplay>
   }
 
   static String _formatTimestamp(DateTime dt) {
-    final utcMillis = dt.toUtc().millisecondsSinceEpoch;
-    const istOffsetMillis = 5 * 60 * 60 * 1000 + 30 * 60 * 1000;
-    final ist = DateTime.fromMillisecondsSinceEpoch(
-      utcMillis + istOffsetMillis,
-      isUtc: true,
-    ).toLocal();
+    // Convert the provided DateTime to IST (UTC+5:30) deterministically
+    // Avoid relying on local system timezone conversions; add the offset to UTC.
+    final ist = dt.toUtc().add(const Duration(hours: 5, minutes: 30));
 
     final y = ist.year.toString().padLeft(4, '0');
     final m = ist.month.toString().padLeft(2, '0');
