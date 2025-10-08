@@ -844,23 +844,26 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
     final inactiveColor = isDark ? Colors.grey.shade400 : Colors.grey;
     // here the gradient is defined with two colors.
 
+    const double itemWidth = 76.0;
+    const double circleSize = 48.0;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Container(
-          height: 70,
+          height: 78,
           decoration: BoxDecoration(
-            // Keep the dark gradient for dark mode; for light mode use a
-            // subtle blue-tinted gradient so the bar reads 'cooler'.
-            // Navigation Bar background gradient
             gradient: isDark
                 ? LinearGradient(colors: [bgStart, bgEnd])
-                : LinearGradient(colors: [const Color.fromARGB(255, 195, 209, 246), const Color.fromARGB(255, 202, 216, 255)]),
+                : LinearGradient(
+                    colors: [
+                      const Color.fromARGB(255, 195, 209, 246),
+                      const Color.fromARGB(255, 202, 216, 255),
+                    ],
+                  ),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                // use a soft bluish shadow on light theme
-                // Navigation Bar shadow
                 color: isDark
                     ? const Color.fromARGB(141, 0, 0, 0)
                     : Colors.blue.withAlpha((0.06 * 255).round()),
@@ -873,24 +876,96 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: List.generate(items.length, (i) {
               final active = widget.currentIndex == i;
-              return GestureDetector(
-                onTap: () => widget.onTap(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  padding: EdgeInsets.all(active ? 12 : 10),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: active
-                    // Navigation Button icon background color
-                        ? Colors.blue
-                        : (isDark
-                              ? Colors.grey.shade800
-                              : Colors.grey.shade100),
-                  ),
-                  child: Icon(
-                    items[i],
-                    color: active ? Colors.white : inactiveColor,
-                    size: active ? 28 : 24,
+              final iconData = items[i];
+
+              // Each item is a SizedBox with InkWell for tap detection
+              // and a TweenAnimationBuilder for smooth scaling and translation.
+              // Also
+              return SizedBox(
+                width: itemWidth,
+                child: Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => widget.onTap(i),
+                    splashColor: Colors.white24,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(
+                        begin: 1.0,
+                        end: active ? 1.12 : 1.0,
+                      ),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutBack,
+                      builder: (context, scale, child) {
+                        final translateY = active ? -6.0 : 0.0;
+                        return Transform.translate(
+                          offset: Offset(0, translateY),
+                          child: Transform.scale(
+                            scale: scale,
+                            alignment: Alignment.center,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Material(
+                        color: active
+                            ? Colors.blue
+                            : (isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade100),
+                        shape: const CircleBorder(),
+                        elevation: active ? 6 : 0,
+                        child: SizedBox(
+                          width: circleSize,
+                          height: circleSize,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                iconData,
+                                color: active ? Colors.white : inactiveColor,
+                                size: active ? 28 : 24,
+                              ),
+                              if (iconData == Icons.bookmark &&
+                                  context
+                                      .watch<CounterProvider>()
+                                      .saved
+                                      .isNotEmpty)
+                                Positioned(
+                                  right: 6,
+                                  top: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black26,
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${context.watch<CounterProvider>().saved.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               );
