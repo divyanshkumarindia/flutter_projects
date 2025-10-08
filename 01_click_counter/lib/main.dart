@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 
 void main() => runApp(const MyApp());
 
@@ -281,6 +280,7 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'Flutter Basic App',
           theme: ThemeData(
+            // App buttons and primary color
             primarySwatch: Colors.blue,
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
@@ -850,15 +850,20 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
         child: Container(
           height: 70,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [bgStart, bgEnd],
-              // here the gradient is defined with two colors.
-            ),
+            // Keep the dark gradient for dark mode; for light mode use a
+            // subtle blue-tinted gradient so the bar reads 'cooler'.
+            // Navigation Bar background gradient
+            gradient: isDark
+                ? LinearGradient(colors: [bgStart, bgEnd])
+                : LinearGradient(colors: [const Color.fromARGB(255, 195, 209, 246), const Color.fromARGB(255, 202, 216, 255)]),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                // shadow for the nav bar
-                color: isDark ? Colors.black54 : Colors.black12,
+                // use a soft bluish shadow on light theme
+                // Navigation Bar shadow
+                color: isDark
+                    ? const Color.fromARGB(141, 0, 0, 0)
+                    : Colors.blue.withAlpha((0.06 * 255).round()),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -876,6 +881,7 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: active
+                    // Navigation Button icon background color
                         ? Colors.blue
                         : (isDark
                               ? Colors.grey.shade800
@@ -990,9 +996,12 @@ class ControlButtons extends StatelessWidget {
             const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: () {
-                // Share using platform share sheet (SharePlus)
-                SharePlus.instance.share(
-                  ShareParams(text: 'Current count: ${provider.count}'),
+                // Fallback: copy to clipboard (no share_plus dependency)
+                Clipboard.setData(
+                  ClipboardData(text: provider.count.toString()),
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Count copied for sharing')),
                 );
               },
               icon: const Icon(Icons.share),
