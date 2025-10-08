@@ -780,7 +780,7 @@ class ControlButtons extends StatelessWidget {
             // Sized box for spacing
             ElevatedButton(
               onPressed: () {
-                HapticFeedback.selectionClick();
+                if (settings.hapticsEnabled) HapticFeedback.selectionClick();
                 // single-tap increment should animate
                 provider.increment(animate: true);
               },
@@ -794,7 +794,7 @@ class ControlButtons extends StatelessWidget {
                   ? Colors.grey.shade700
                   : Colors.grey.shade300,
               onTap: () {
-                HapticFeedback.selectionClick();
+                if (settings.hapticsEnabled) HapticFeedback.selectionClick();
                 provider.increment(animate: true);
               },
               onHold: () {
@@ -858,43 +858,41 @@ class ControlButtons extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           onPressed: () async {
-            HapticFeedback.mediumImpact();
-            // mediumImpact is a stronger feedback
-            final confirmed = await showDialog<bool>(
-              // This dialog will ask the user for confirmation before resetting.
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                title: const Text('Confirm reset'),
-                content: const Text(
-                  'Are you sure you want to reset the counter to zero?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Reset'),
-                  ),
-                ],
-              ),
-            );
+            if (settings.hapticsEnabled) HapticFeedback.mediumImpact();
+            // If confirmation is enabled show dialog, otherwise proceed
+            final confirmed = settings.confirmReset
+                ? await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Confirm reset'),
+                      content: const Text(
+                        'Are you sure you want to reset the counter to zero?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('Reset'),
+                        ),
+                      ],
+                    ),
+                  )
+                : true;
 
             if (confirmed == true) {
-              // Ensure the widget is still mounted before using the context
               if (!context.mounted) return;
               provider.reset();
 
-              // Snackbar confirmation
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Counter reset to zero')),
               );
             }
           },
           child: const Text('Reset'), // it's the text for the reset button.
-          // here can add an icon if needed.
         ),
       ],
     );
