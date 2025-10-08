@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 void main() => runApp(const MyApp());
+
+// Helper: format DateTime to IST string
+String formatToIst(DateTime dt) {
+  final ist = dt.toUtc().add(const Duration(hours: 5, minutes: 30));
+  final y = ist.year.toString().padLeft(4, '0');
+  final m = ist.month.toString().padLeft(2, '0');
+  final d = ist.day.toString().padLeft(2, '0');
+  final h = ist.hour.toString().padLeft(2, '0');
+  final min = ist.minute.toString().padLeft(2, '0');
+  return '$y-$m-$d $h:$min IST';
+}
 
 class CounterProvider extends ChangeNotifier {
   static const _prefsKey = 'counter_value';
@@ -16,7 +28,7 @@ class CounterProvider extends ChangeNotifier {
   int _count = 0;
   DateTime? _lastUpdated;
   bool _shouldAnimate = false;
-  final List<int> _saved = [];
+  final List<SavedEntry> _saved = [];
   int get count => _count;
   DateTime? get lastUpdated => _lastUpdated;
 
@@ -31,12 +43,20 @@ class CounterProvider extends ChangeNotifier {
     if (millis != null) {
       _lastUpdated = DateTime.fromMillisecondsSinceEpoch(millis);
     }
-    // load saved list
+    // load saved list (support legacy string ints and new JSON objects)
     final savedList = prefs.getStringList(_prefsSavedKey) ?? <String>[];
     _saved.clear();
     for (final s in savedList) {
-      final v = int.tryParse(s);
-      if (v != null) _saved.add(v);
+      try {
+        final map = jsonDecode(s) as Map<String, dynamic>;
+        _saved.add(SavedEntry.fromJson(map));
+      } catch (_) {
+        // fallback to legacy int string
+        final v = int.tryParse(s);
+        if (v != null) {
+          _saved.add(SavedEntry(value: v, savedAt: null, label: null));
+        }
+      }
     }
     notifyListeners();
   }
@@ -50,18 +70,21 @@ class CounterProvider extends ChangeNotifier {
         _lastUpdated!.millisecondsSinceEpoch,
       );
     }
-    // save list as strings
+    // save list as json strings
     await prefs.setStringList(
       _prefsSavedKey,
-      _saved.map((e) => e.toString()).toList(),
+      _saved.map((e) => jsonEncode(e.toJson())).toList(),
     );
   }
 
   /// Save the current counter value into the saved list (deduplicated at top).
-  void saveCurrent() {
+  void saveCurrent({String? label}) {
     // avoid duplicates of the same value in sequence
-    if (_saved.isEmpty || _saved.first != _count) {
-      _saved.insert(0, _count);
+    if (_saved.isEmpty || _saved.first.value != _count) {
+      _saved.insert(
+        0,
+        SavedEntry(value: _count, savedAt: DateTime.now(), label: label),
+      );
       // keep list reasonably small for performance
       if (_saved.length > 200) _saved.removeRange(200, _saved.length);
       _saveToPrefs();
@@ -69,7 +92,7 @@ class CounterProvider extends ChangeNotifier {
     }
   }
 
-  List<int> get saved => List.unmodifiable(_saved);
+  List<SavedEntry> get saved => List.unmodifiable(_saved);
 
   void deleteSavedAt(int index) {
     if (index < 0 || index >= _saved.length) return;
@@ -89,8 +112,17 @@ class CounterProvider extends ChangeNotifier {
   /// Restore the saved value into current counter
   void restoreSavedAt(int index) {
     if (index < 0 || index >= _saved.length) return;
-    final v = _saved[index];
-    restore(v);
+    final entry = _saved[index];
+    restore(entry.value, updatedAt: entry.savedAt);
+  }
+
+  /// Rename/edit a saved entry's label
+  void renameSavedAt(int index, String? label) {
+    if (index < 0 || index >= _saved.length) return;
+    final e = _saved[index];
+    _saved[index] = e.copyWith(label: label);
+    _saveToPrefs();
+    notifyListeners();
   }
 
   void increment({bool animate = true}) {
@@ -129,6 +161,44 @@ class CounterProvider extends ChangeNotifier {
     _saveToPrefs();
     notifyListeners();
   }
+}
+
+/// A saved entry with value, optional savedAt timestamp, and optional label.
+class SavedEntry {
+  final int value;
+  final DateTime? savedAt;
+  final String? label;
+
+  SavedEntry({required this.value, this.savedAt, this.label});
+
+  SavedEntry copyWith({int? value, DateTime? savedAt, String? label}) {
+    return SavedEntry(
+      value: value ?? this.value,
+      savedAt: savedAt ?? this.savedAt,
+      label: label ?? this.label,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'value': value,
+    'savedAt': savedAt?.millisecondsSinceEpoch,
+    'label': label,
+  };
+
+  static SavedEntry fromJson(Map<String, dynamic> m) {
+    final savedAtMillis = m['savedAt'] as int?;
+    return SavedEntry(
+      value: (m['value'] as num).toInt(),
+      savedAt: savedAtMillis != null
+          ? DateTime.fromMillisecondsSinceEpoch(savedAtMillis)
+          : null,
+      label: m['label'] as String?,
+    );
+  }
+
+  @override
+  String toString() =>
+      'SavedEntry(value: $value, savedAt: $savedAt, label: $label)';
 }
 
 //-----------------------------------------------------------------------------
@@ -521,47 +591,106 @@ class _SavedPage extends StatelessWidget {
                     itemCount: items.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final v = items[index];
+                      final entry = items[index];
+                      final titleText = entry.label?.isNotEmpty == true
+                          ? '${entry.label} — ${entry.value}'
+                          : 'Value: ${entry.value}';
+                      final subtitle = entry.savedAt != null
+                          ? 'Saved: ${formatToIst(entry.savedAt!)}'
+                          : 'Saved: N/A';
+
                       return ListTile(
                         title: Text(
-                          'Value: $v',
+                          titleText,
                           style: const TextStyle(fontSize: 16),
                         ),
-                        subtitle: Text('Tap to restore'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () async {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete saved value'),
-                                content: Text('Delete saved value $v?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
+                        subtitle: Text(subtitle),
+                        leading: const Icon(Icons.bookmark_outline),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined),
+                              tooltip: 'Edit label',
+                              onPressed: () async {
+                                final controller = TextEditingController(
+                                  text: entry.label ?? '',
+                                );
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Edit label'),
+                                    content: TextField(
+                                      controller: controller,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Short label',
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        child: const Text('Save'),
+                                      ),
+                                    ],
                                   ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(true),
-                                    child: const Text('Delete'),
+                                );
+                                if (ok == true) {
+                                  if (!context.mounted) return;
+                                  provider.renameSavedAt(
+                                    index,
+                                    controller.text.trim().isEmpty
+                                        ? null
+                                        : controller.text.trim(),
+                                  );
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete saved value'),
+                                    content: Text(
+                                      'Delete saved value ${entry.value}?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            );
-                            if (ok == true) {
-                              if (!context.mounted) return;
-                              provider.deleteSavedAt(index);
-                            }
-                          },
+                                );
+                                if (ok == true) {
+                                  if (!context.mounted) return;
+                                  provider.deleteSavedAt(index);
+                                }
+                              },
+                            ),
+                          ],
                         ),
                         onTap: () async {
                           final ok = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text('Restore saved value'),
-                              content: Text('Restore counter to $v?'),
+                              content: Text(
+                                'Restore counter to ${entry.value}?',
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () =>
@@ -580,7 +709,9 @@ class _SavedPage extends StatelessWidget {
                             if (!context.mounted) return;
                             provider.restoreSavedAt(index);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Restored $v')),
+                              SnackBar(
+                                content: Text('Restored ${entry.value}'),
+                              ),
                             );
                           }
                         },
