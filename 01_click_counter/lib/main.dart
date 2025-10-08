@@ -131,34 +131,108 @@ class CounterProvider extends ChangeNotifier {
   }
 }
 
+//-----------------------------------------------------------------------------
+// SettingsProvider holds user preferences persisted to SharedPreferences.
+class SettingsProvider extends ChangeNotifier {
+  static const _prefsDarkKey = 'settings_dark_mode';
+  static const _prefsHapticsKey = 'settings_haptics';
+  static const _prefsConfirmResetKey = 'settings_confirm_reset';
+  // Keys for SharedPreferences, to store user settings.
+
+  // bool is used for true/false settings
+  bool _isDark = false; // default to light mode
+  bool _hapticsEnabled = true; // default to haptics on
+  bool _confirmReset = true; // default to confirm on reset
+
+  bool get isDarkMode =>
+      _isDark; // true if dark mode is enabled, and if false then it's light mode, like here it's false.
+  bool get hapticsEnabled => _hapticsEnabled; // true if haptics are enabled
+  bool get confirmReset =>
+      _confirmReset; // true if confirmation is required on reset
+
+  SettingsProvider() {
+    _load();
+  }
+
+  // Load settings from SharedPreferences
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDark = prefs.getBool(_prefsDarkKey) ?? false;
+    _hapticsEnabled = prefs.getBool(_prefsHapticsKey) ?? true;
+    _confirmReset = prefs.getBool(_prefsConfirmResetKey) ?? true;
+    notifyListeners();
+  }
+
+  // Save settings to SharedPreferences
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsDarkKey, _isDark);
+    await prefs.setBool(_prefsHapticsKey, _hapticsEnabled);
+    await prefs.setBool(_prefsConfirmResetKey, _confirmReset);
+  }
+
+  // Setters that update the value, save to prefs, and notify listeners
+  set isDarkMode(bool v) {
+    if (_isDark == v) return;
+    _isDark = v;
+    _save();
+    notifyListeners();
+  }
+
+  // Setter for hapticsEnabled
+  set hapticsEnabled(bool v) {
+    if (_hapticsEnabled == v) return;
+    _hapticsEnabled = v;
+    _save();
+    notifyListeners();
+  }
+
+  // Setter for confirmReset
+  set confirmReset(bool v) {
+    if (_confirmReset == v) return;
+    _confirmReset = v;
+    _save();
+    notifyListeners();
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => CounterProvider(),
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Flutter Basic App',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white,
-              backgroundColor: Colors.blue,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CounterProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+      ],
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Flutter Basic App',
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.blue,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+              ),
             ),
           ),
+          darkTheme: ThemeData.dark(), // Dark theme
+          themeMode: settings.isDarkMode
+              ? ThemeMode.dark
+              : ThemeMode.light, // Use theme based on settings
+          home: const MyHomePage(),
         ),
-        home: const MyHomePage(),
       ),
     );
   }
 }
-
-// The previous stateless MyHomePage has been replaced by a stateful
-// implementation below that supports tabbed navigation (IndexedStack).
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -235,15 +309,105 @@ class _SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.settings, size: 72, color: Colors.grey),
-              SizedBox(height: 12),
-              Text('Settings (placeholder)'),
-            ],
+        // here safe area is used to avoid notches and system UI overlaps.
+        // In this widget, we will use a Padding widget to give some space around the content.
+        // And inside, we will use a Consumer to listen to SettingsProvider.
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Consumer<SettingsProvider>(
+            builder: (context, settings, _) => ListView(
+              // ListView for scrollable content
+              // ListView allows vertical scrolling if content overflows.
+              children: [
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  // Switch for dark mode
+                  // switchlisttile is a widget that provides a switch with a title and subtitle.
+                  title: const Text('Dark theme'),
+                  subtitle: const Text('Use dark mode for the app'),
+                  value: settings.isDarkMode,
+                  onChanged: (v) => settings.isDarkMode = v,
+                ),
+                const Divider(),
+                SwitchListTile(
+                  // Switch for haptics
+                  title: const Text('Haptics'),
+                  subtitle: const Text('Enable vibration feedback'),
+                  value: settings.hapticsEnabled,
+                  onChanged: (v) => settings.hapticsEnabled = v,
+                ),
+                const Divider(),
+                SwitchListTile(
+                  // Switch for confirmation on reset
+                  title: const Text('Confirm on reset'),
+                  subtitle: const Text('Ask for confirmation before resetting'),
+                  value: settings.confirmReset,
+                  onChanged: (v) => settings.confirmReset = v,
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  // About card with app info
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'About',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Click Counter — a tiny Flutter app to track and save counts.',
+                        ),
+                        SizedBox(height: 6),
+                        Text('Developer: Divyansh Singh'),
+                        SizedBox(height: 6),
+                        Text(
+                          'Made with ❤️ — lightweight, simple, and persistent.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30.0),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                    onPressed: () {
+                      showAboutDialog(
+                        // show about dialog with app info
+                        // dialog shows app name, version, and developer info.
+                        context: context,
+                        applicationName: 'Click Counter',
+                        applicationVersion: '1.0.0',
+                        children: const [
+                          Text('Simple counter app by Divyansh Singh.'),
+                        ],
+                      );
+                    },
+                    child: const Text('App info'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -521,6 +685,13 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
   Widget build(BuildContext context) {
     final items = [Icons.home, Icons.bookmark, Icons.settings];
 
+    // Determine colors based on theme
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgStart = isDark ? Colors.grey.shade900 : Colors.white;
+    final bgEnd = isDark ? Colors.grey.shade800 : Colors.grey.shade50;
+    final inactiveColor = isDark ? Colors.grey.shade400 : Colors.grey;
+    // here the gradient is defined with two colors.
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -528,12 +699,14 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
           height: 70,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.white, Colors.grey.shade50],
+              colors: [bgStart, bgEnd],
+              // here the gradient is defined with two colors.
             ),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black12,
+                // shadow for the nav bar
+                color: isDark ? Colors.black54 : Colors.black12,
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -550,11 +723,15 @@ class _PremiumBottomNavState extends State<_PremiumBottomNav>
                   padding: EdgeInsets.all(active ? 12 : 10),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: active ? Colors.blue : Colors.grey.shade100,
+                    color: active
+                        ? Colors.blue
+                        : (isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade100),
                   ),
                   child: Icon(
                     items[i],
-                    color: active ? Colors.white : Colors.grey,
+                    color: active ? Colors.white : inactiveColor,
                     size: active ? 28 : 24,
                   ),
                 ),
@@ -574,6 +751,8 @@ class ControlButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<CounterProvider>(context, listen: false);
+    final settings = Provider.of<SettingsProvider>(context, listen: false);
+    // settings is used to check if haptics are enabled.
     return Column(
       children: [
         // Row with left arrow, main increase button, and right arrow
@@ -583,9 +762,13 @@ class ControlButtons extends StatelessWidget {
             // Left arrow (decrement)
             _RepeatIconButton(
               icon: Icons.arrow_left,
-              color: Colors.grey.shade300,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade300,
               onTap: () {
-                HapticFeedback.selectionClick();
+                if (settings.hapticsEnabled) HapticFeedback.selectionClick();
+                // setting haptics enabled will provide feedback
+                // and selectionClick is a light feedback
                 provider.decrement(animate: true);
               },
               onHold: () {
@@ -595,9 +778,6 @@ class ControlButtons extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             // Sized box for spacing
-            // And to control the radius of the button  like to make it more rounded or less rounded.
-            // to control radius of the button we can use the shape property of the ElevatedButton.
-            // like ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))
             ElevatedButton(
               onPressed: () {
                 HapticFeedback.selectionClick();
@@ -610,7 +790,9 @@ class ControlButtons extends StatelessWidget {
             // Right arrow (increment)
             _RepeatIconButton(
               icon: Icons.arrow_right,
-              color: Colors.grey.shade300,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade300,
               onTap: () {
                 HapticFeedback.selectionClick();
                 provider.increment(animate: true);
@@ -641,7 +823,7 @@ class ControlButtons extends StatelessWidget {
               icon: const Icon(Icons.copy),
               label: const Text('Copy'),
             ),
-             const SizedBox(width: 8),
+            const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: () {
                 // Save current count to saved list
