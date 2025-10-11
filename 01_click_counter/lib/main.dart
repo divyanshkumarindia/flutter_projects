@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:convert';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+
+// Local modules
+import 'providers/counter_provider.dart';
+import 'providers/settings_provider.dart';
+import 'widgets/bottom_nav.dart';
 
 void main() => runApp(const MyApp());
 
@@ -19,251 +22,11 @@ String formatToIst(DateTime dt) {
   return '$y-$m-$d $h:$min IST';
 }
 
-class CounterProvider extends ChangeNotifier {
-  static const _prefsKey = 'counter_value';
-  static const _prefsUpdatedKey = 'counter_last_updated';
-  static const _prefsSavedKey = 'counter_saved_list';
-  // Keys for SharedPreferences, to store the counter value and last updated timestamp.
-  int _count = 0;
-  DateTime? _lastUpdated;
-  bool _shouldAnimate = false;
-  final List<SavedEntry> _saved = [];
-  int get count => _count;
-  DateTime? get lastUpdated => _lastUpdated;
-
-  CounterProvider() {
-    _loadFromPrefs();
-  }
-
-  Future<void> _loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    _count = prefs.getInt(_prefsKey) ?? 0;
-    final millis = prefs.getInt(_prefsUpdatedKey);
-    if (millis != null) {
-      _lastUpdated = DateTime.fromMillisecondsSinceEpoch(millis);
-    }
-    // load saved list (support legacy string ints and new JSON objects)
-    final savedList = prefs.getStringList(_prefsSavedKey) ?? <String>[];
-    _saved.clear();
-    for (final s in savedList) {
-      try {
-        final map = jsonDecode(s) as Map<String, dynamic>;
-        _saved.add(SavedEntry.fromJson(map));
-      } catch (_) {
-        // fallback to legacy int string
-        final v = int.tryParse(s);
-        if (v != null) {
-          _saved.add(SavedEntry(value: v, savedAt: null, label: null));
-        }
-      }
-    }
-    notifyListeners();
-  }
-
-  Future<void> _saveToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_prefsKey, _count);
-    if (_lastUpdated != null) {
-      await prefs.setInt(
-        _prefsUpdatedKey,
-        _lastUpdated!.millisecondsSinceEpoch,
-      );
-    }
-    // save list as json strings
-    await prefs.setStringList(
-      _prefsSavedKey,
-      _saved.map((e) => jsonEncode(e.toJson())).toList(),
-    );
-  }
-
-  /// Save the current counter value into the saved list (deduplicated at top).
-  void saveCurrent({String? label}) {
-    // avoid duplicates of the same value in sequence
-    if (_saved.isEmpty || _saved.first.value != _count) {
-      _saved.insert(
-        0,
-        SavedEntry(value: _count, savedAt: DateTime.now(), label: label),
-      );
-      // keep list reasonably small for performance
-      if (_saved.length > 200) _saved.removeRange(200, _saved.length);
-      _saveToPrefs();
-      notifyListeners();
-    }
-  }
-
-  List<SavedEntry> get saved => List.unmodifiable(_saved);
-
-  void deleteSavedAt(int index) {
-    if (index < 0 || index >= _saved.length) return;
-    _saved.removeAt(index);
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  /// Clear all saved entries
-  void clearSaved() {
-    if (_saved.isEmpty) return;
-    _saved.clear();
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  /// Restore the saved value into current counter
-  void restoreSavedAt(int index) {
-    if (index < 0 || index >= _saved.length) return;
-    final entry = _saved[index];
-    restore(entry.value, updatedAt: entry.savedAt);
-  }
-
-  /// Rename/edit a saved entry's label
-  void renameSavedAt(int index, String? label) {
-    if (index < 0 || index >= _saved.length) return;
-    final e = _saved[index];
-    _saved[index] = e.copyWith(label: label);
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  void increment({bool animate = true}) {
-    _count++;
-    _lastUpdated = DateTime.now();
-    _shouldAnimate = animate;
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  void decrement({bool animate = false}) {
-    if (_count <= 0) return;
-    _count--;
-    _lastUpdated = DateTime.now();
-    _shouldAnimate = animate;
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  bool get shouldAnimate => _shouldAnimate;
-
-  void clearAnimateFlag() {
-    _shouldAnimate = false;
-  }
-
-  void reset() {
-    _count = 0;
-    _lastUpdated = DateTime.now();
-    _saveToPrefs();
-    notifyListeners();
-  }
-
-  void restore(int value, {DateTime? updatedAt}) {
-    _count = value;
-    _lastUpdated = updatedAt ?? DateTime.now();
-    _saveToPrefs();
-    notifyListeners();
-  }
-}
-
-/// A saved entry with value, optional savedAt timestamp, and optional label.
-class SavedEntry {
-  final int value;
-  final DateTime? savedAt;
-  final String? label;
-
-  SavedEntry({required this.value, this.savedAt, this.label});
-
-  SavedEntry copyWith({int? value, DateTime? savedAt, String? label}) {
-    return SavedEntry(
-      value: value ?? this.value,
-      savedAt: savedAt ?? this.savedAt,
-      label: label ?? this.label,
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-    'value': value,
-    'savedAt': savedAt?.millisecondsSinceEpoch,
-    'label': label,
-  };
-
-  static SavedEntry fromJson(Map<String, dynamic> m) {
-    final savedAtMillis = m['savedAt'] as int?;
-    return SavedEntry(
-      value: (m['value'] as num).toInt(),
-      savedAt: savedAtMillis != null
-          ? DateTime.fromMillisecondsSinceEpoch(savedAtMillis)
-          : null,
-      label: m['label'] as String?,
-    );
-  }
-
-  @override
-  String toString() =>
-      'SavedEntry(value: $value, savedAt: $savedAt, label: $label)';
-}
-
-//-----------------------------------------------------------------------------
-// SettingsProvider holds user preferences persisted to SharedPreferences.
-class SettingsProvider extends ChangeNotifier {
-  static const _prefsDarkKey = 'settings_dark_mode';
-  static const _prefsHapticsKey = 'settings_haptics';
-  static const _prefsConfirmResetKey = 'settings_confirm_reset';
-  // Keys for SharedPreferences, to store user settings.
-
-  // bool is used for true/false settings
-  bool _isDark = false; // default to light mode
-  bool _hapticsEnabled = true; // default to haptics on
-  bool _confirmReset = true; // default to confirm on reset
-
-  bool get isDarkMode =>
-      _isDark; // true if dark mode is enabled, and if false then it's light mode, like here it's false.
-  bool get hapticsEnabled => _hapticsEnabled; // true if haptics are enabled
-  bool get confirmReset =>
-      _confirmReset; // true if confirmation is required on reset
-
-  SettingsProvider() {
-    _load();
-  }
-
-  // Load settings from SharedPreferences
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isDark = prefs.getBool(_prefsDarkKey) ?? false;
-    _hapticsEnabled = prefs.getBool(_prefsHapticsKey) ?? true;
-    _confirmReset = prefs.getBool(_prefsConfirmResetKey) ?? true;
-    notifyListeners();
-  }
-
-  // Save settings to SharedPreferences
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefsDarkKey, _isDark);
-    await prefs.setBool(_prefsHapticsKey, _hapticsEnabled);
-    await prefs.setBool(_prefsConfirmResetKey, _confirmReset);
-  }
-
-  // Setters that update the value, save to prefs, and notify listeners
-  set isDarkMode(bool v) {
-    if (_isDark == v) return;
-    _isDark = v;
-    _save();
-    notifyListeners();
-  }
-
-  // Setter for hapticsEnabled
-  set hapticsEnabled(bool v) {
-    if (_hapticsEnabled == v) return;
-    _hapticsEnabled = v;
-    _save();
-    notifyListeners();
-  }
-
-  // Setter for confirmReset
-  set confirmReset(bool v) {
-    if (_confirmReset == v) return;
-    _confirmReset = v;
-    _save();
-    notifyListeners();
-  }
-}
+// The CounterProvider, SavedEntry, and SettingsProvider implementations
+// were moved to separate files under lib/models and lib/providers.
+// See: lib/models/saved_entry.dart
+//      lib/providers/counter_provider.dart
+//      lib/providers/settings_provider.dart
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -362,7 +125,7 @@ class _MyHomePageState extends State<MyHomePage>
     return Scaffold(
       appBar: AppBar(),
       body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: _PremiumBottomNav(
+      bottomNavigationBar: PremiumBottomNav(
         currentIndex: _currentIndex,
         onTap: _setIndex,
       ),
