@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -23,6 +24,53 @@ class SettingsPage extends StatelessWidget {
           child: Consumer<SettingsProvider>(
             builder: (context, settings, _) => ListView(
               children: [
+                ListTile(
+                  title: const Text('Change name'),
+                  subtitle: Text(
+                    settings.userName == null || settings.userName!.isEmpty
+                        ? 'Not set'
+                        : settings.userName!,
+                  ),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: () async {
+                    final controller = TextEditingController(
+                      text: settings.userName ?? '',
+                    );
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Enter your display name'),
+                        content: TextField(
+                          inputFormatters: [
+                            LengthLimitingTextInputFormatter(15),
+                          ],
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: 'Your name (max 15 char.)',
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text('Save'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      if (!context.mounted) return;
+                      settings.userName = controller.text.trim();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Name updated')),
+                      );
+                    }
+                  },
+                ),
+                const Divider(),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   title: const Text('Dark theme'),
@@ -44,6 +92,7 @@ class SettingsPage extends StatelessWidget {
                   value: settings.confirmReset,
                   onChanged: (v) => settings.confirmReset = v,
                 ),
+                const Divider(),
                 const SizedBox(height: 16),
                 Card(
                   elevation: 2,
