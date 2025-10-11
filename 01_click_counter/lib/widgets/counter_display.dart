@@ -8,7 +8,6 @@ class CounterDisplay extends StatefulWidget {
   State<CounterDisplay> createState() => _CounterDisplayState();
 }
 
-
 class _CounterDisplayState extends State<CounterDisplay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;

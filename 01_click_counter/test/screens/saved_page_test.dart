@@ -8,15 +8,17 @@ import 'package:my_app/screens/saved.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('SavedPage shows saved entries and allows delete all', (WidgetTester tester) async {
+  testWidgets('SavedPage shows saved entries and allows delete all', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
 
     final counter = CounterProvider();
     await Future.delayed(const Duration(milliseconds: 50));
 
     // Pre-populate a saved entry
-  counter.increment();
-  await counter.saveCurrent(label: 'a');
+    counter.increment();
+    await counter.saveCurrent(label: 'a');
 
     await tester.pumpWidget(
       MaterialApp(

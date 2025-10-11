@@ -9,7 +9,9 @@ import 'package:my_app/widgets/controls.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('ControlButtons increments, saves and copies', (WidgetTester tester) async {
+  testWidgets('ControlButtons increments, saves and copies', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
 
     final counter = CounterProvider();

@@ -11,8 +11,8 @@ void main() {
     });
 
     test('increment and decrement adjust count and persist', () async {
-  final provider = CounterProvider();
-  await Future.delayed(Duration(milliseconds: 50)); // allow async load
+      final provider = CounterProvider();
+      await Future.delayed(Duration(milliseconds: 50)); // allow async load
 
       expect(provider.count, 0);
 
@@ -24,8 +24,8 @@ void main() {
     });
 
     test('prevent negative counts', () async {
-  final provider = CounterProvider();
-  await Future.delayed(Duration(milliseconds: 50));
+      final provider = CounterProvider();
+      await Future.delayed(Duration(milliseconds: 50));
 
       expect(provider.count, 0);
       provider.decrement();
@@ -33,8 +33,8 @@ void main() {
     });
 
     test('save and restore saved entries', () async {
-  final provider = CounterProvider();
-  await Future.delayed(Duration(milliseconds: 50));
+      final provider = CounterProvider();
+      await Future.delayed(Duration(milliseconds: 50));
 
       provider.increment();
       provider.saveCurrent(label: 'first');
