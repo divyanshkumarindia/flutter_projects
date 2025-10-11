@@ -13,16 +13,19 @@ import 'package:my_app/main.dart';
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp()); // removed 'const' as MyApp is not a const constructor
+    await tester.pumpWidget(
+      MyApp(),
+    ); // removed 'const' as MyApp is not a const constructor
     // which can be solved by adding const before MyApp() in main.dart file
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
     expect(find.text('1'), findsNothing);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  // Tap the 'Increase Number' button and wait for any animations to finish.
+  await tester.tap(find.text('Increase Number'));
+  // pumpAndSettle will run frames until all animations complete (or timeout).
+  await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
     // Verify that our counter has incremented.
     expect(find.text('0'), findsNothing);

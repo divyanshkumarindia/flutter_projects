@@ -8,10 +8,12 @@ class CounterDisplay extends StatefulWidget {
   State<CounterDisplay> createState() => _CounterDisplayState();
 }
 
+
 class _CounterDisplayState extends State<CounterDisplay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _offsetAnim;
+  CounterProvider? _provider;
 
   @override
   void initState() {
@@ -26,15 +28,25 @@ class _CounterDisplayState extends State<CounterDisplay>
       begin: Offset.zero,
       end: const Offset(0, -0.15),
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<CounterProvider>(context, listen: false);
-      provider.addListener(_onProviderChange);
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the provider reference and attach listener once. Using
+    // didChangeDependencies ensures it's safe to call Provider.of here and
+    // we can remove the listener in dispose without accessing the tree.
+    final provider = Provider.of<CounterProvider>(context, listen: false);
+    if (_provider != provider) {
+      _provider?.removeListener(_onProviderChange);
+      _provider = provider;
+      _provider?.addListener(_onProviderChange);
+    }
   }
 
   void _onProviderChange() {
-    final provider = Provider.of<CounterProvider>(context, listen: false);
+    final provider = _provider;
+    if (provider == null) return;
     if (provider.shouldAnimate) {
       _controller.forward().then((_) => _controller.reverse());
       provider.clearAnimateFlag();
@@ -43,10 +55,9 @@ class _CounterDisplayState extends State<CounterDisplay>
 
   @override
   void dispose() {
-    Provider.of<CounterProvider>(
-      context,
-      listen: false,
-    ).removeListener(_onProviderChange);
+    // Remove listener from the cached provider reference (safe during
+    // dispose because we don't lookup ancestors here).
+    _provider?.removeListener(_onProviderChange);
     _controller.dispose();
     super.dispose();
   }
