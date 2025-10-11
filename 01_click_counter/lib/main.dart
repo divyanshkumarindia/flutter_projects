@@ -69,59 +69,57 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Safely prompt for a name once, but only after SettingsProvider has
-    // finished loading SharedPreferences. This avoids repeated prompts
-    // when the app is reloaded while prefs are still initializing.
-    if (_didPromptForName) return;
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
+    // Safely access SettingsProvider and prompt for a name once if not
+    // already prompted. Use the persistent `namePrompted` flag so we don't
+    // keep asking after the user skipped or saved.
+    if (!_didPromptForName) {
+      final settings = Provider.of<SettingsProvider>(context, listen: false);
+      // Wait until the provider has loaded from SharedPreferences.
+      if (!settings.initialized) return;
 
-    Future<void> maybePrompt() async {
-      if (!mounted) return;
-      if (settings.namePrompted) return;
-      final controller = TextEditingController();
-      final ok = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Welcome! What is your name?'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: 'Your name'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Skip'),
+      if (!settings.namePrompted &&
+          (settings.userName == null || settings.userName!.isEmpty)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          final controller = TextEditingController();
+          final ok = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Text(
+                'Welcome to Click Counter!\nWhat is your name?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              content: TextField(
+                controller: controller,
+                decoration: const InputDecoration(hintText: 'Your name'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Skip'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Save'),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      if (ok == true) {
-        settings.userName = controller.text.trim();
+          );
+          if (!mounted) return;
+          if (ok == true) {
+            settings.userName = controller.text.trim();
+          }
+          settings.namePrompted = true;
+        });
       }
-      settings.namePrompted = true;
+      _didPromptForName = true;
     }
-
-    if (settings.isInitialized) {
-      // safe to prompt immediately
-      WidgetsBinding.instance.addPostFrameCallback((_) => maybePrompt());
-    } else {
-      // wait for initialization; listen once
-      void listener() {
-        if (settings.isInitialized) {
-          settings.removeListener(listener);
-          WidgetsBinding.instance.addPostFrameCallback((_) => maybePrompt());
-        }
-      }
-
-      settings.addListener(listener);
-    }
-    _didPromptForName = true;
   }
 
   Widget _buildHomeTab(SettingsProvider settings) {

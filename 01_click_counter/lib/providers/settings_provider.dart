@@ -12,15 +12,15 @@ class SettingsProvider extends ChangeNotifier {
   bool _hapticsEnabled = true;
   bool _confirmReset = true;
   String? _userName;
-  bool _namePrompted = false;
   bool _initialized = false;
+  bool _namePrompted = false;
 
   bool get isDarkMode => _isDarkMode;
   bool get hapticsEnabled => _hapticsEnabled;
   bool get confirmReset => _confirmReset;
   String? get userName => _userName;
+  bool get initialized => _initialized;
   bool get namePrompted => _namePrompted;
-  bool get isInitialized => _initialized;
 
   SettingsProvider() {
     _load();
